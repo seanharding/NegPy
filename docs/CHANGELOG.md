@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.14.2
+
+- Fix regression: loading monochrome DNG files no longer crashes the app (segfault in display conversion and pixel readout).
+
 ## 0.14.1
 
 - Added **`override.toml`**: a config file in `Documents/NegPy/` (created on first run) for forcing GPU backend, Qt rendering, texture size cap, and more — without touching the app. See [Troubleshooting](../README.md#-troubleshooting) for details.

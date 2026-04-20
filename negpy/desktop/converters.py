@@ -20,12 +20,13 @@ class ImageConverter:
         else:
             u8_buffer = buffer
 
-        # 2. Handle dimensions
-        h, w = u8_buffer.shape[:2]
-
-        # Ensure data is contiguous for QImage
+        # 2. Expand monochrome (H,W) or (H,W,1) to (H,W,3)
+        if u8_buffer.ndim == 2 or (u8_buffer.ndim == 3 and u8_buffer.shape[2] == 1):
+            u8_buffer = np.stack([u8_buffer.squeeze()] * 3, axis=-1)
         if not u8_buffer.flags["C_CONTIGUOUS"]:
             u8_buffer = np.ascontiguousarray(u8_buffer)
+
+        h, w = u8_buffer.shape[:2]
 
         # 3. Create QImage
         # RGB888 is standard for our 3-channel processed output

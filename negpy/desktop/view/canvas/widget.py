@@ -157,6 +157,10 @@ class ImageCanvas(QWidget):
             y = int(max(0, min(h - 1, ny * h)))
             px = buf[y, x]
             scale = 1.0 / 255.0 if buf.dtype == np.uint8 else 1.0
+            px = np.atleast_1d(px)
+            if px.shape[0] == 1:
+                v = float(px[0]) * scale
+                return (v, v, v)
             return (float(px[0]) * scale, float(px[1]) * scale, float(px[2]) * scale)
         return None
 
