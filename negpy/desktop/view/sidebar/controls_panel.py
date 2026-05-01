@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt, QTimer
 import qtawesome as qta
 
 from negpy.desktop.controller import AppController
+from negpy.desktop.view.shortcut_registry import tooltip_with_shortcut
 from negpy.desktop.view.widgets.collapsible import CollapsibleSection
 from negpy.desktop.view.widgets.charts import MiniHistogramWidget
 from negpy.desktop.view.styles.theme import THEME
@@ -151,6 +152,61 @@ class ControlsPanel(QWidget):
         self.geometry_section.reset_requested.connect(lambda: self.controller.session.reset_section("geometry"))
         self.process_section.reset_requested.connect(lambda: self.controller.session.reset_section("process"))
         self.retouch_section.reset_requested.connect(lambda: self.controller.session.reset_section("retouch"))
+
+    def apply_shortcut_tooltips(self) -> None:
+        exp = self.exposure_sidebar
+        geo = self.geometry_sidebar
+        lab = self.lab_sidebar
+        proc = self.process_sidebar
+        ret = self.retouch_sidebar
+        ton = self.toning_sidebar
+
+        exp.pick_wb_btn.setToolTip(tooltip_with_shortcut("Pick white balance from canvas", "pick_wb"))
+        exp.cyan_slider.setToolTip(tooltip_with_shortcut("Cyan-Red white balance shift", ["cyan_inc", "cyan_dec"]))
+        exp.magenta_slider.setToolTip(tooltip_with_shortcut("Magenta-Green white balance shift", ["magenta_up", "magenta_down"]))
+        exp.yellow_slider.setToolTip(tooltip_with_shortcut("Yellow-Blue white balance shift", ["yellow_up", "yellow_down"]))
+        exp.density_slider.setToolTip(tooltip_with_shortcut("Overall exposure", ["density_up", "density_down"]))
+        exp.grade_slider.setToolTip(tooltip_with_shortcut("Contrast grade", ["grade_up", "grade_down"]))
+        exp.toe_slider.setToolTip(tooltip_with_shortcut("Shadow toe lift", ["toe_inc", "toe_dec"]))
+        exp.toe_w_slider.setToolTip(tooltip_with_shortcut("Shadow toe width", ["toe_width_inc", "toe_width_dec"]))
+        exp.sh_slider.setToolTip(tooltip_with_shortcut("Highlight shoulder roll", ["shoulder_inc", "shoulder_dec"]))
+        exp.sh_w_slider.setToolTip(tooltip_with_shortcut("Highlight shoulder width", ["shoulder_width_inc", "shoulder_width_dec"]))
+
+        geo.manual_crop_btn.setToolTip(tooltip_with_shortcut("Manual crop", "manual_crop"))
+        geo.offset_slider.setToolTip(tooltip_with_shortcut("Auto-crop border offset", ["offset_inc", "offset_dec"]))
+        geo.fine_rot_slider.setToolTip(tooltip_with_shortcut("Fine rotation", ["fine_rot_inc", "fine_rot_dec"]))
+
+        proc.analysis_buffer_slider.setToolTip(
+            tooltip_with_shortcut("Analysis region crop", ["analysis_buffer_inc", "analysis_buffer_dec"])
+        )
+        proc.drange_clip_slider.setToolTip(tooltip_with_shortcut("Dynamic range clip", ["drange_clip_inc", "drange_clip_dec"]))
+        proc.white_point_slider.setToolTip(tooltip_with_shortcut("White point offset", ["white_point_inc", "white_point_dec"]))
+        proc.black_point_slider.setToolTip(tooltip_with_shortcut("Black point offset", ["black_point_inc", "black_point_dec"]))
+
+        lab.separation_slider.setToolTip(tooltip_with_shortcut("Color separation", ["separation_inc", "separation_dec"]))
+        lab.chroma_denoise_slider.setToolTip(tooltip_with_shortcut("Chroma noise reduction", ["chroma_denoise_inc", "chroma_denoise_dec"]))
+        lab.saturation_slider.setToolTip(tooltip_with_shortcut("Saturation", ["saturation_inc", "saturation_dec"]))
+        lab.vibrance_slider.setToolTip(tooltip_with_shortcut("Vibrance", ["vibrance_inc", "vibrance_dec"]))
+        lab.clahe_slider.setToolTip(tooltip_with_shortcut("Local contrast (CLAHE)", ["clahe_inc", "clahe_dec"]))
+        lab.sharpen_slider.setToolTip(tooltip_with_shortcut("Sharpening", ["sharpen_inc", "sharpen_dec"]))
+        lab.glow_slider.setToolTip(tooltip_with_shortcut("Glow", ["glow_inc", "glow_dec"]))
+        lab.halation_slider.setToolTip(tooltip_with_shortcut("Halation", ["halation_inc", "halation_dec"]))
+
+        ret.pick_dust_btn.setToolTip(tooltip_with_shortcut("Toggle heal tool", "pick_dust"))
+        ret.threshold_slider.setToolTip(tooltip_with_shortcut("Auto dust threshold", ["threshold_inc", "threshold_dec"]))
+        ret.auto_size_slider.setToolTip(tooltip_with_shortcut("Auto dust size", ["auto_size_inc", "auto_size_dec"]))
+        ret.manual_size_slider.setToolTip(tooltip_with_shortcut("Heal brush size", ["manual_size_inc", "manual_size_dec"]))
+
+        ton.selenium_slider.setToolTip(tooltip_with_shortcut("Selenium toning", ["selenium_inc", "selenium_dec"]))
+        ton.sepia_slider.setToolTip(tooltip_with_shortcut("Sepia toning", ["sepia_inc", "sepia_dec"]))
+        ton.shadow_hue_slider.setToolTip(tooltip_with_shortcut("Shadow split-tone hue", ["shadow_hue_inc", "shadow_hue_dec"]))
+        ton.shadow_str_slider.setToolTip(
+            tooltip_with_shortcut("Shadow split-tone strength", ["shadow_strength_inc", "shadow_strength_dec"])
+        )
+        ton.highlight_hue_slider.setToolTip(tooltip_with_shortcut("Highlight split-tone hue", ["highlight_hue_inc", "highlight_hue_dec"]))
+        ton.highlight_str_slider.setToolTip(
+            tooltip_with_shortcut("Highlight split-tone strength", ["highlight_strength_inc", "highlight_strength_dec"])
+        )
 
     def _sync_all_sidebars(self) -> None:
         """Force all sidebar panels to update their widgets from current AppState."""

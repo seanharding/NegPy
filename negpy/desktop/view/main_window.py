@@ -25,12 +25,28 @@ from negpy.desktop.view.widgets.overlays import ImageMetadataPanel
 from negpy.desktop.view.widgets.status_bar import TopStatusBar
 from negpy.desktop.view.widgets.toast import Toast
 from negpy.domain.models import AspectRatio
+from negpy.infrastructure.gpu.resources import GPUTexture
 from negpy.kernel.image.logic import float_to_uint8
 from negpy.kernel.system.config import APP_CONFIG
 from negpy.kernel.system.logging import get_logger
 from negpy.services.export.print import PrintService
 
 logger = get_logger(__name__)
+
+
+def _display_buffer_for_canvas(buffer: object) -> object:
+    if isinstance(buffer, GPUTexture):
+        try:
+            readback = buffer.readback()
+        except Exception:
+            logger.exception("Failed to read back GPU preview for canvas display")
+            return buffer
+
+        if isinstance(readback, np.ndarray) and readback.ndim == 3 and readback.shape[2] >= 3:
+            return np.ascontiguousarray(readback[:, :, :3])
+        return readback
+
+    return buffer
 
 
 class _EmptyStateOverlay(QWidget):
@@ -70,7 +86,7 @@ class MainWindow(QMainWindow):
 
         self._init_ui()
         self._connect_signals()
-        setup_keyboard_shortcuts(self)
+        self.shortcut_manager = setup_keyboard_shortcuts(self)
         self._update_title()
 
     def _init_ui(self) -> None:
@@ -141,6 +157,7 @@ class MainWindow(QMainWindow):
         """Wire controller and view."""
         self.controller.session.state_changed.connect(self._update_title)
         self.controller.image_updated.connect(self._on_image_updated)
+        self.controller.preview_loaded.connect(self._refresh_image_info)
         self.controller.loading_started.connect(self.canvas.clear)
         self.controller.loading_started.connect(lambda: self.empty_state.setVisible(False))
 
@@ -187,7 +204,7 @@ class MainWindow(QMainWindow):
             logger.warning("Render completed but 'base_positive' not found in metrics")
             return
 
-        buffer = metrics["base_positive"]
+        buffer = _display_buffer_for_canvas(metrics["base_positive"])
         content_rect = metrics.get("content_rect")
 
         if isinstance(buffer, np.ndarray):

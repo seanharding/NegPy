@@ -273,7 +273,7 @@ class ActionToolbar(QWidget):
     def _show_shortcuts(self) -> None:
         from negpy.desktop.view.widgets.shortcuts_overlay import ShortcutsOverlay
 
-        dlg = ShortcutsOverlay(self.window())
+        dlg = ShortcutsOverlay(self.window().shortcut_manager, self.window())
         dlg.exec()
 
     def _update_ui_state(self) -> None:

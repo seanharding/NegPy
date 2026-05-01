@@ -44,6 +44,7 @@ class AppController(QObject):
     """
 
     image_updated = pyqtSignal()
+    preview_loaded = pyqtSignal()
     metrics_available = pyqtSignal(dict)
     loading_started = pyqtSignal()
     export_progress = pyqtSignal(int, int, str)
@@ -290,6 +291,7 @@ class AppController(QObject):
         self.state.preview_raw = raw
         self.state.original_res = dims
         self.state.current_file_path = file_path
+        self.preview_loaded.emit()
         self.request_render()
 
     def toggle_hq_preview(self) -> None:

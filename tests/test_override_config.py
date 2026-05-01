@@ -230,7 +230,7 @@ class TestApplyOverride(unittest.TestCase):
     def test_dx12_sets_wgpu_backend(self):
         cfg = OverrideConfig(backend="dx12")
         apply(cfg, _make_app_config())
-        self.assertEqual(os.environ.get("WGPU_BACKEND_TYPE"), "Dx12")
+        self.assertEqual(os.environ.get("WGPU_BACKEND_TYPE"), "D3D12")
 
     def test_dx12_sets_qt_rhi_backend(self):
         cfg = OverrideConfig(backend="dx12")

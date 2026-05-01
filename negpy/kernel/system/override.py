@@ -131,7 +131,7 @@ def _parse(data: dict) -> OverrideConfig:
 
 _WGPU_BACKEND: dict[str, str] = {
     "vulkan": "Vulkan",
-    "dx12": "Dx12",
+    "dx12": "D3D12",
     "metal": "Metal",
 }
 

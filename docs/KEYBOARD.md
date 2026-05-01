@@ -2,6 +2,8 @@
 
 Summary of available keyboard shortcuts in NegPy.
 
+All shortcuts, including slider adjustments, can be changed in-app from the `?` shortcut overlay via `Customize`.
+
 ## Navigation
 | Key | Action |
 |-----|--------|

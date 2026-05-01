@@ -165,6 +165,12 @@ class BaseSlider(QWidget):
     def value(self) -> float:
         return self.spin.value()
 
+    def adjust_by(self, delta: float) -> None:
+        new_value = max(self._min, min(self._max, self.value() + delta))
+        self.setValue(new_value)
+        self._emit_value()
+        self._on_committed()
+
     def mouseDoubleClickEvent(self, event) -> None:
         """Resets to default value."""
         self.setValue(self._default)
