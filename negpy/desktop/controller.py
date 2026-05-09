@@ -639,12 +639,16 @@ class AppController(QObject):
 
         self.set_status("Rendering...")
 
+        preview_raw = self.state.preview_raw
+        if preview_raw is None:
+            return
+
         target_size = float(APP_CONFIG.preview_render_size)
-        if self.state.hq_preview and self.state.preview_raw is not None:
-            target_size = float(max(self.state.preview_raw.shape[:2]))
+        if self.state.hq_preview and preview_raw is not None:
+            target_size = float(max(preview_raw.shape[:2]))
 
         task = RenderTask(
-            buffer=self.state.preview_raw,
+            buffer=preview_raw,
             config=self.state.config,
             source_hash=self.state.current_file_hash or "preview",
             preview_size=target_size,
@@ -700,7 +704,7 @@ class AppController(QObject):
             icc_invert=self.state.icc_invert,
         )
 
-        source_exif = self.state.source_exif.get(self.state.current_file_hash)
+        source_exif = self.state.source_exif.get(self.state.current_file_hash or "")
 
         self._run_export_tasks(
             [
@@ -880,6 +884,8 @@ class AppController(QObject):
         if self._cleaned_up:
             return
         self._cleaned_up = True
+        self._render_debounce.stop()
+        self._cursor_readout_timer.stop()
         if self.render_thread.isRunning():
             self.render_thread.quit()
             self.render_thread.wait()
