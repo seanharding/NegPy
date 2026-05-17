@@ -442,9 +442,7 @@ class _ScanUnsupportedPlaceholder(QWidget):
         label = QLabel(
             "Scanner support not available on Windows.\n\n"
             "NegPy v1 scanner integration uses SANE (libsane),\n"
-            "supported on Linux and macOS only.\n\n"
-            "Workaround: scan via VueScan / SilverFast / vendor tool,\n"
-            "then load the resulting TIFF/DNG via the Files tab."
+            "supported on Linux and macOS only."
         )
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setWordWrap(True)

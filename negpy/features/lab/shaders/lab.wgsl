@@ -260,12 +260,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 blur_luma += dot(to_perceptual(sample_color), LUMA_COEFFS) * weight;
             }
         }
-        let p_color = to_perceptual(color);
-        let luma = dot(p_color, LUMA_COEFFS);
+        // Derive the USM ratio from input_tex (matching the blur source). Using
+        // post-saturation `color` here against a pre-lab `blur_luma` would
+        // synthesise a phantom edge wherever the lab stages shifted perceptual
+        // luma — most visibly on saturated reds, where CIELAB sat preserves L*
+        // but cuts G/B and drops the perceptual luma far enough below
+        // neighbouring blur to drive the ratio negative and crush the pixel.
+        let input_color = textureLoad(input_tex, coords, 0).rgb;
+        let input_luma = dot(to_perceptual(input_color), LUMA_COEFFS);
         let amount = params.sharpen * 2.5;
-        let sharpened_luma = luma + (luma - blur_luma) * amount;
-        let ratio = sharpened_luma / max(luma, 1e-6);
-        color = to_linear(p_color * ratio);
+        let sharpened_luma = clamp(input_luma + (input_luma - blur_luma) * amount, 0.0, 1.0);
+        let ratio = sharpened_luma / max(input_luma, 1e-6);
+        color = to_linear(to_perceptual(color) * ratio);
     }
 
     // 6. Glow and Halation

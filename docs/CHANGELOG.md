@@ -2,7 +2,7 @@
 
   ## 0.21.0
 
-  - Added initial **Scanner support** on Linux and macOS: new Scan tab — select a SANE-compatible scanner, choose resolution, bit depth, output format, and filename template; scanned files auto-load into the session. This is initial implementation, tested with Plustek 8100 on Arch Linux and latest macOS. As it often is with (old in most cases of film scanners) hardware support i cannot guarantee that it will support your scanner. **IMPORTANT: check [README.md](README.md) for information about SANE dependencies. **IMPORTANT**
+  - Added initial **Scanner support** on Linux and macOS: new Scan tab — select a SANE-compatible scanner, choose resolution, bit depth, output format, and filename template; scanned files auto-load into the session. This is initial implementation, tested with Plustek 8100 on Arch Linux and latest macOS. As it often is with (old in most cases of film scanners) hardware support i cannot guarantee that it will support your scanner. **IMPORTANT: check [README.md](../README.md) for information about SANE dependencies. **IMPORTANT**
   - Added **Lock Bounds** button in the Process section — freeze normalization bounds so cropping and re-analysis don't overwrite them; useful for locking in exposure after initial analysis.
   - Added **Copy/Paste Bounds** between files — transfer normalization bounds from one file to another (**CTRL+Shift+C** -> CTRL+V).
   - **Canvas zoom**: pinch-to-zoom gesture support; smooth trackpad scrolling; increased min/max zoom bounds. @reederphill
@@ -10,12 +10,12 @@
   - Fix: Custom metadata not written correctly in tiffs.
   - Fix: Hot folder mode caused session UI debouncing lag.
   - Fix: **Saturation** slider above 1.0 darkened already-saturated reds/blues. Saturation now scales chroma in CIELAB, preserving perceived lightness (matches Vibrance behavior). (#193)
-  - Docs: More detailed [USER_GUIDE.md](docs/USER_GUIDE.md)
+  - Docs: More detailed [USER_GUIDE.md](USER_GUIDE.md)
 
 
 ## 0.20.0
 
-- Added **filtering** options to film strip - details in [FILTERING.md](docs/FILTERING.md)
+- Added **filtering** options to film strip - details in [FILTERING.md](FILTERING.md)
 - Fix: HQ preview scaling up crop offset setting.
 
 ## 0.19.0
@@ -213,7 +213,7 @@ NOTE: due to some backend changes in storing the edits you might get weird color
 
 - Fix: export folder not being correctly set on some configs on first run.
 - Fix: Camera WB setting not forcing bounds re-analysis which lead on color cast stacking instead of color cast removal.
-- Added [USER_GUIDE.md](docs/USER_GUIDE.md)
+- Added [USER_GUIDE.md](USER_GUIDE.md)
 
 
 ## 0.9.13
@@ -293,7 +293,7 @@ NOTE: due to some backend changes in storing the edits you might get weird color
 - Implemented `Analysis Buffer` to ensure that analysis is not thrown off by film border or lightsource outside of it.
 - Added `Camera WB` button to use vendor-specific white balance corrections (helps green/nuclear color casts on some files)
 - GPU acceleration (Vulkan/Metal)
-- [keyboard](docs/KEYBOARD.md) shortcuts
+- [keyboard](KEYBOARD.md) shortcuts
 - Bugfixes: improved handling of some raw files that previously resulted in heavy colorcasts and compresssion artifacts.
 
 ## 0.9.3
