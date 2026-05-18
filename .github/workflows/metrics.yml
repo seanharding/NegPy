@@ -1,9 +1,9 @@
 # Wall-clock preview load metrics. Uploads JSON artifact for trending and posts a
-# PR comment with cold/warm times. Never blocks merge.
+# PR comment with cold times per format. Never blocks merge.
 #
-# The Fujifilm X70 RAF fixture (~20 MB) is cached on the runner after first download.
-# If the source URL is unavailable the download step continues-on-error and the timing
-# tests skip gracefully — the workflow still passes.
+# Fixtures (CR2, NEF, ARW, ~20-30 MB each) are sourced from rawsamples.ch and
+# cached on the runner. If a download fails the timing tests skip gracefully —
+# the workflow still passes.
 
 name: Metrics
 
@@ -64,17 +64,29 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/negpy-metrics
-          key: negpy-perf-raw-dscf1276-v1
+          key: negpy-perf-raw-rawsamples-v1
 
-      - name: Download perf fixture
+      - name: Download perf fixtures
         if: steps.cache-fixture.outputs.cache-hit != 'true'
         continue-on-error: true
         run: |
           mkdir -p ~/.cache/negpy-metrics
-          curl -fL "https://kristoffertrolle.com/raw-samples/x70/DSCF1276.RAF" \
-            -o ~/.cache/negpy-metrics/DSCF1276.RAF \
-            --max-time 120 \
-            --retry 2
+          curl -fL "http://www.rawsamples.ch/raws/canon/RAW_CANON_EOS_5DMARK3.CR2" \
+            -o ~/.cache/negpy-metrics/RAW_CANON_EOS_5DMARK3.CR2 \
+            --max-time 120 --retry 2
+          curl -fL "http://www.rawsamples.ch/raws/nikon/d3x/RAW_NIKON_D3X.NEF" \
+            -o ~/.cache/negpy-metrics/RAW_NIKON_D3X.NEF \
+            --max-time 120 --retry 2
+          curl -fL "http://rawsamples.ch/raws/sony/RAW_SONY_RX10.ARW" \
+            -o ~/.cache/negpy-metrics/RAW_SONY_RX10.ARW \
+            --max-time 120 --retry 2
+          curl -fL "http://www.rawsamples.ch/raws/fuji/RAW_FUJI_X-T10.RAF" \
+            -o ~/.cache/negpy-metrics/RAW_FUJI_X-T10.RAF \
+            --max-time 120 --retry 2
+          curl -fL "http://www.rawsamples.ch/raws/leica/RAW_LEICA_M240.DNG" \
+            -o ~/.cache/negpy-metrics/RAW_LEICA_M240.DNG \
+            --max-time 120 --retry 2
+
 
       - name: Run metrics tests
         env:
@@ -111,27 +123,26 @@ jobs:
             const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
             const m = data.metrics || {};
             const machine = data.machine_label || 'unknown';
-            const cold = m['preview.load.cold_s'];
-            const warm = m['preview.load.warm_s'];
-
-            const fmt = v => v != null ? `${v.toFixed(3)} s` : 'skipped';
-            const ratio = (cold != null && warm != null && warm > 0)
-              ? `×${Math.round(cold / warm)} faster`
-              : 'n/a';
-
             const sha = context.sha.slice(0, 7);
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const fmtS = v => v != null ? `${v.toFixed(3)} s` : 'skipped';
+            const fmtMpx = v => v != null ? `${v.toFixed(2)} MPx/s` : 'skipped';
+            const formats = ['cr2', 'nef', 'arw', 'raf', 'dng'];
+            const rows = formats.map(f => {
+              const s = m[`preview.load.cold_s.${f}`];
+              const mpx = m[`preview.load.cold_mpx_per_s.${f}`];
+              return `| ${f.toUpperCase()} | ${fmtS(s)} | ${fmtMpx(mpx)} |`;
+            }).join('\n');
 
             const body = [
               '<!-- negpy-metrics -->',
               `## Preview load metrics (${machine})`,
-              '| metric | value |',
-              '|---|---|',
-              `| cold load | ${fmt(cold)} |`,
-              `| warm hit  | ${fmt(warm)} |`,
-              `| ratio     | ${ratio} |`,
+              '| format | cold load | throughput |',
+              '|---|---|---|',
+              rows,
               '',
-              `_fixture: DSCF1276.RAF · sha: ${sha} · [full JSON](${runUrl})_`,
+              `_fixtures: rawsamples.ch · sha: ${sha} · [full JSON](${runUrl})_`,
             ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({

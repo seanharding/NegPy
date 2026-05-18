@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from . import fixture as _fixture_mod
 from . import recorder
 from .labeling import metrics_machine_label
 
@@ -56,7 +57,8 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
             "github_workflow": os.environ.get("GITHUB_WORKFLOW", ""),
         },
         "input": {
-            "negpy_perf_raw": os.environ.get("NEGPY_PERF_RAW", ""),
+            f"negpy_perf_raw_{f.key}": os.environ.get(f"NEGPY_PERF_RAW_{f.key.upper()}", "")
+            for f in _fixture_mod.FIXTURES
         },
         "metrics": recorder.snapshot(),
     }

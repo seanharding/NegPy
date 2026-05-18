@@ -71,15 +71,23 @@ make test
 
 `make test` skips tests marked `slow` by default (see `addopts` in `pyproject.toml`). This includes the performance metrics suite in `tests/metrics/`.
 
-To run the metrics tests locally, point `NEGPY_PERF_RAW` at a Fujifilm X70 RAF file and run:
+To run the metrics tests and write a JSON results file:
 
 ```bash
-NEGPY_PERF_RAW=/path/to/DSCF1276.RAF \
-NEGPY_METRICS_OUT=metrics-artifacts/preview_metrics.json \
+NEGPY_METRICS_OUT=metrics.json uv run pytest tests/metrics/ -m "slow" -q
+```
+
+Fixtures (Canon CR2, Nikon NEF, Sony ARW, Fuji RAF, Leica DNG) are downloaded automatically from rawsamples.ch on first run (~20–30 MB each) and cached in `~/.cache/negpy-metrics/`. Tests skip gracefully if a download fails.
+
+To point a test at a local file instead of downloading, set the per-format env var:
+
+```bash
+NEGPY_PERF_RAW_CR2=/path/to/file.CR2 \
+NEGPY_METRICS_OUT=metrics.json \
 uv run pytest tests/metrics/ -m "slow" -q
 ```
 
-If `NEGPY_PERF_RAW` is not set the suite will attempt to download the fixture to `~/.cache/negpy-metrics/` automatically, or skip if the download fails.
+Available overrides: `NEGPY_PERF_RAW_CR2`, `NEGPY_PERF_RAW_NEF`, `NEGPY_PERF_RAW_ARW`, `NEGPY_PERF_RAW_RAF`, `NEGPY_PERF_RAW_DNG`.
 
 ### 3. Workflow (The Makefile)
 The `Makefile` is the central source of truth for developer commands and executes everything via `uv run`:

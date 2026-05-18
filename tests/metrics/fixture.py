@@ -1,24 +1,78 @@
 """
-Resolves a real RAW file path for performance timing tests.
+Resolves real RAW file paths for performance timing tests.
 
-Priority:
-  1. NEGPY_PERF_RAW env var (local dev or self-hosted runner)
-  2. ~/.cache/negpy-metrics/DSCF1276.RAF (previously cached)
-  3. Download from public URL and cache
+Priority for each fixture:
+  1. NEGPY_PERF_RAW_<KEY> env var (e.g. NEGPY_PERF_RAW_CR2)
+  2. ~/.cache/negpy-metrics/<filename> (previously cached)
+  3. Download from rawsamples.ch and cache
   4. None — caller should pytest.skip()
 """
 
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
-_RAF_URL = "https://kristoffertrolle.com/raw-samples/x70/DSCF1276.RAF"
-_RAF_FILENAME = "DSCF1276.RAF"
 _CACHE_DIR = Path.home() / ".cache" / "negpy-metrics"
+_RAF_FILENAME = "RAW_FUJI_X-T10.RAF"
+_RAF_URL = "http://www.rawsamples.ch/raws/fuji/RAW_FUJI_X-T10.RAF"
+
+
+@dataclass(frozen=True)
+class RawFixture:
+    key: str       # short lowercase id used in env vars and metric names
+    filename: str  # basename for the local cache file
+    url: str       # public download URL
+
+
+FIXTURES: list[RawFixture] = [
+    RawFixture(
+        key="cr2",
+        filename="RAW_CANON_EOS_5DMARK3.CR2",
+        url="http://www.rawsamples.ch/raws/canon/RAW_CANON_EOS_5DMARK3.CR2",
+    ),
+    RawFixture(
+        key="nef",
+        filename="RAW_NIKON_D3X.NEF",
+        url="http://www.rawsamples.ch/raws/nikon/d3x/RAW_NIKON_D3X.NEF",
+    ),
+    RawFixture(
+        key="arw",
+        filename="RAW_SONY_RX10.ARW",
+        url="http://rawsamples.ch/raws/sony/RAW_SONY_RX10.ARW",
+    ),
+    RawFixture(
+        key="raf",
+        filename="RAW_FUJI_X-T10.RAF",
+        url="http://www.rawsamples.ch/raws/fuji/RAW_FUJI_X-T10.RAF",
+    ),
+    RawFixture(
+        key="dng",
+        filename="RAW_LEICA_M240.DNG",
+        url="http://www.rawsamples.ch/raws/leica/RAW_LEICA_M240.DNG",
+    ),
+]
+
+
+def get_fixture_path(fix: RawFixture) -> str | None:
+    """Return a local path for *fix*, downloading if needed. None if unavailable."""
+    env = os.environ.get(f"NEGPY_PERF_RAW_{fix.key.upper()}", "").strip()
+    if env and os.path.isfile(env):
+        return env
+
+    cached = _CACHE_DIR / fix.filename
+    if cached.is_file():
+        return str(cached)
+
+    if _download(fix.url, cached):
+        return str(cached)
+
+    return None
 
 
 def get_perf_raw_path() -> str | None:
+    """Return a local path for the RAF perf fixture, downloading if needed."""
     env = os.environ.get("NEGPY_PERF_RAW", "").strip()
     if env and os.path.isfile(env):
         return env
