@@ -416,7 +416,8 @@ class GPUEngine:
                 settings.process.analysis_buffer,
                 process_mode=settings.process.process_mode,
                 e6_normalize=settings.process.e6_normalize,
-                percentile_clip=settings.process.drange_clip,
+                percentile_clip=settings.process.luma_range_clip,
+                color_clip=settings.process.color_range_clip,
             )
 
         shadow_refs = shadow_refs_override
@@ -847,14 +848,18 @@ class GPUEngine:
         )
 
         from negpy.features.exposure.logic import (
+            _reference_linear_value,
             normalize_refs,
             per_channel_curve_params,
         )
         from negpy.features.exposure.models import EXPOSURE_CONSTANTS
         from negpy.features.exposure.normalization import luminance_density_range
+        from negpy.features.exposure.papers import effective_constants, effective_paper_profile
 
         exp = settings.exposure
-        d_min = EXPOSURE_CONSTANTS["d_min"] if exp.paper_dmin else 0.0
+        paper = effective_paper_profile(exp.paper_profile, settings.process.process_mode)
+        pc = effective_constants(paper)  # tonal overrides; non-paper keys == EXPOSURE_CONSTANTS
+        d_min = paper.d_min if exp.paper_dmin else 0.0
         # metered_anchor may be measured for stats even when auto_exposure is off;
         # only let it move the render when the toggle is on.
         render_anchor = metered_anchor if exp.auto_exposure else None
@@ -878,17 +883,30 @@ class GPUEngine:
             textural_range,
             d_min=d_min,
             anchor=render_anchor,
+            paper=paper,
         )
         cmy_m = EXPOSURE_CONSTANTS["cmy_max_density"]
+        tint = paper.base_tint_cmy
+        # Grade-coupled baseline toe/shoulder: mirrors PhotometricProcessor._process_print.
+        _slope_norm = min(
+            max(
+                (slopes[1] - float(EXPOSURE_CONSTANTS["slope_min"]))
+                / (float(EXPOSURE_CONSTANTS["slope_max"]) - float(EXPOSURE_CONSTANTS["slope_min"])),
+                0.0,
+            ),
+            1.0,
+        )
+        _toe_eff = exp.toe + float(EXPOSURE_CONSTANTS["toe_grade_strength"]) * _slope_norm
+        _shoulder_eff = exp.shoulder + float(EXPOSURE_CONSTANTS["shoulder_grade_strength"]) * _slope_norm
 
         e_data = (
             struct.pack("ffff", pivots[0], pivots[1], pivots[2], 0.0)
             + struct.pack("ffff", slopes[0], slopes[1], slopes[2], 0.0)
             + struct.pack(
                 "ffff",
-                exp.wb_cyan * cmy_m,
-                exp.wb_magenta * cmy_m,
-                exp.wb_yellow * cmy_m,
+                exp.wb_cyan * cmy_m + tint[0],
+                exp.wb_magenta * cmy_m + tint[1],
+                exp.wb_yellow * cmy_m + tint[2],
                 0.0,
             )
             + struct.pack(
@@ -905,27 +923,29 @@ class GPUEngine:
                 exp.highlight_yellow * cmy_m,
                 0.0,
             )
+            # Asymmetric H&D print-curve scalars; mirrors _apply_print_curve_kernel.
             + struct.pack(
-                "ffffff",
-                exp.toe * EXPOSURE_CONSTANTS["toe_shoulder_strength"],
+                "14fI4f",
+                _toe_eff * EXPOSURE_CONSTANTS["toe_shoulder_strength"],
+                _shoulder_eff * EXPOSURE_CONSTANTS["toe_shoulder_strength"],
                 exp.toe_width,
-                exp.shoulder * EXPOSURE_CONSTANTS["toe_shoulder_strength"],
                 exp.shoulder_width,
-                EXPOSURE_CONSTANTS["d_max"],
                 d_min,
-            )
-            + struct.pack(
-                "Iffff",
+                pc["d_max"],
+                pc["toe_sharpness_base"],
+                pc["shoulder_sharpness_base"],
+                pc["toeshoulder_width_ref"],
+                pc["toe_height"],
+                pc["shoulder_height"],
+                pc["anchor_target_density"],
+                float(EXPOSURE_CONSTANTS["flare_fraction"]) if exp.flare else 0.0,
+                float(EXPOSURE_CONSTANTS["target_system_gamma"]) if exp.surround else 1.0,
                 mode_val,
-                EXPOSURE_CONSTANTS["toe_onset_density"],
-                EXPOSURE_CONSTANTS["curve_asymptote"],
-                EXPOSURE_CONSTANTS["dmax_shoulder"],
-                EXPOSURE_CONSTANTS["paper_toe_nu"],
+                _reference_linear_value(d_min, paper),
+                float(pc["paper_midtone_gamma"]),
+                float(pc["paper_gamma_width"]),
+                0.0,
             )
-            # flare (veiling-glare floor) + surround gamma + 1 pad float; mirrors the CPU kernel.
-            + struct.pack("f", float(EXPOSURE_CONSTANTS["flare_fraction"]) if exp.flare else 0.0)
-            + struct.pack("f", float(EXPOSURE_CONSTANTS["target_system_gamma"]) if exp.surround else 1.0)
-            + b"\x00" * 4
         )
 
         cls = float(settings.lab.clahe_strength)
@@ -1434,7 +1454,8 @@ class GPUEngine:
                 analysis_buffer=settings.process.analysis_buffer,
                 process_mode=settings.process.process_mode,
                 e6_normalize=settings.process.e6_normalize,
-                percentile_clip=settings.process.drange_clip,
+                percentile_clip=settings.process.luma_range_clip,
+                color_clip=settings.process.color_range_clip,
             )
 
         global_shadow_refs = None
@@ -1443,8 +1464,9 @@ class GPUEngine:
             ah, aw = img_rot.shape[:2]
             a_scale = min(1.0, APP_CONFIG.preview_render_size / max(ah, aw))
             analysis_roi = (int(y1 * a_scale), int(y2 * a_scale), int(x1 * a_scale), int(x2 * a_scale))
+            analysis_img = _downsample_for_analysis(img_rot, APP_CONFIG.preview_render_size)
             global_shadow_refs = measure_shadow_log_refs(
-                _downsample_for_analysis(img_rot, APP_CONFIG.preview_render_size),
+                analysis_img,
                 roi=analysis_roi,
                 analysis_buffer=settings.process.analysis_buffer,
             )
