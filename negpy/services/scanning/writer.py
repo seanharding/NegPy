@@ -1,5 +1,6 @@
+import io
 import os
-import shutil
+import struct
 import tempfile
 
 import numpy as np
@@ -61,17 +62,11 @@ def write_tiff_16bit(result: ScanResult, path: str) -> str:
 
 
 def write_dng_linear(result: ScanResult, path: str) -> str:
-    """Write ScanResult to DNG LinearRaw format.
+    """Write ScanResult to an uncompressed 16-bit LinearRaw DNG via tifffile.
 
-    If result.ir is present, it is stacked as an extra sample channel.
-    Uses atomic write via tempdir + rename.
-
-    Returns final path.
+    A LinearRaw DNG is a single-IFD TIFF plus a few DNG tags. If result.ir is
+    present it is stacked as an extra sample. Atomic write; returns final path.
     """
-    from pidng.core import RAW2DNG, DNGTags
-    from pidng.defs import PhotometricInterpretation
-    from pidng.dng import Tag
-
     if not path.lower().endswith(".dng"):
         path = path + ".dng"
 
@@ -83,40 +78,66 @@ def write_dng_linear(result: ScanResult, path: str) -> str:
             ir = ir[:, :, np.newaxis]
         ir = _to_uint16(ir)
         full_array = np.dstack([rgb, ir])
-        samples_per_pixel = 4
     else:
-        full_array = rgb
-        samples_per_pixel = 3
+        full_array = np.ascontiguousarray(rgb)
 
-    h, w = full_array.shape[:2]
+    model = result.device_model
+    # (code, dtype, count, value, writeonce); NewSubfileType=0 is required or LibRaw rejects the DNG.
+    extratags = [
+        (254, 4, 1, 0, True),  # NewSubfileType
+        (50706, 1, 4, (1, 4, 0, 0), True),  # DNGVersion
+        (50707, 1, 4, (1, 0, 0, 0), True),  # DNGBackwardVersion
+        (274, 3, 1, 1, True),  # Orientation
+        (271, 2, len(model) + 1, model, True),  # Make
+        (272, 2, len(model) + 1, model, True),  # Model
+    ]
+    payload = _encode_dng(full_array, extratags)
 
-    tags = DNGTags()
-    tags.set(Tag.ImageWidth, w)
-    tags.set(Tag.ImageLength, h)
-    tags.set(Tag.BitsPerSample, 16)
-    tags.set(Tag.SamplesPerPixel, samples_per_pixel)
-    tags.set(Tag.PhotometricInterpretation, PhotometricInterpretation.Linear_Raw)
-    tags.set(Tag.Orientation, 1)
-    tags.set(Tag.Make, result.device_model)
-    tags.set(Tag.Model, result.device_model)
-
-    converter = RAW2DNG()
-
-    # Write to temp dir, then atomic rename
-    target_dir = os.path.dirname(path) or "."
-    tmpdir = tempfile.mkdtemp(dir=target_dir)
-    tmp_basename = "tmp_" + os.path.basename(tmpdir)
+    fd, tmp_path = tempfile.mkstemp(suffix=".dng", dir=os.path.dirname(path) or ".")
+    os.close(fd)
     try:
-        converter.options(tags, path=tmpdir, compress=False)
-        written = converter.convert(full_array, filename=tmp_basename)
-        # pidng appends .dng if not present
-        if not os.path.exists(written) and not written.endswith(".dng"):
-            written = written + ".dng"
-        os.replace(written, path)
+        with open(tmp_path, "wb") as fh:
+            fh.write(payload)
+        os.replace(tmp_path, path)
     except Exception:
-        shutil.rmtree(tmpdir, ignore_errors=True)
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
         raise
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
 
     return path
+
+
+def _encode_dng(full_array: np.ndarray, extratags: list) -> bytes:
+    """Encode an RGB(+IR) uint16 array as LinearRaw DNG bytes.
+
+    RGB is written with the RGB photometric so tifffile emits a clean 3 *color*
+    samples with no ExtraSamples (matching pidng); the PhotometricInterpretation
+    tag is then patched to LinearRaw (34892), which DNG requires. Marking colour
+    planes as ExtraSamples instead makes some raw processors treat the file as a
+    1-channel sensor + aux planes and mis-demosaic it.
+
+    The IR (4-sample) case keeps the LINEAR_RAW photometric with the extra planes
+    declared as extra samples — there the 4th plane genuinely is infrared, and
+    tifffile has no clean 4-colour-sample form.
+    """
+    buf = io.BytesIO()
+    if full_array.shape[-1] == 3:
+        tifffile.imwrite(buf, full_array, photometric=tifffile.PHOTOMETRIC.RGB, compression=None, metadata=None, extratags=extratags)
+        data = bytearray(buf.getvalue())
+        with tifffile.TiffFile(io.BytesIO(bytes(data))) as tf:
+            offset = tf.pages[0].tags["PhotometricInterpretation"].valueoffset
+            byteorder = tf.byteorder
+        struct.pack_into(byteorder + "H", data, offset, 34892)  # RGB(2) → LinearRaw(34892)
+        return bytes(data)
+
+    extrasamples = (0,) * (full_array.shape[-1] - 1)
+    tifffile.imwrite(
+        buf,
+        full_array,
+        photometric=tifffile.PHOTOMETRIC.LINEAR_RAW,
+        compression=None,
+        metadata=None,
+        extrasamples=extrasamples,
+        extratags=extratags,
+    )
+    return buf.getvalue()
