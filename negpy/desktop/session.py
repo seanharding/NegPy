@@ -30,7 +30,7 @@ class AppState:
     current_file_hash: Optional[str] = None
     source_cs: str = ""
     config: WorkspaceConfig = field(default_factory=WorkspaceConfig)
-    workspace_color_space: str = "Adobe RGB"
+    workspace_color_space: str = "ProPhoto RGB"
     is_processing: bool = False
     active_tool: ToolMode = ToolMode.NONE
     uploaded_files: List[Dict[str, Any]] = field(default_factory=list)
@@ -715,13 +715,13 @@ class DesktopSessionManager(QObject):
     def reset_section(self, section: str) -> None:
         """Reset a single feature section to its default config."""
         from negpy.features.exposure.models import ExposureConfig
+        from negpy.features.finish.models import FinishConfig
+        from negpy.features.geometry.models import GeometryConfig
         from negpy.features.lab.models import LabConfig
         from negpy.features.local.models import LocalAdjustmentsConfig
-        from negpy.features.toning.models import ToningConfig
-        from negpy.features.geometry.models import GeometryConfig
         from negpy.features.process.models import ProcessConfig
         from negpy.features.retouch.models import RetouchConfig
-        from negpy.features.finish.models import FinishConfig
+        from negpy.features.toning.models import ToningConfig
 
         defaults = {
             "exposure": ExposureConfig(),

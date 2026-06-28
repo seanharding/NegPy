@@ -1,16 +1,18 @@
-import rawpy
 import os
-from typing import Optional, Dict
+from typing import Dict, Optional
+
+import rawpy
+
 from negpy.domain.models import ColorSpace
 from negpy.kernel.system.config import APP_CONFIG
 from negpy.kernel.system.paths import get_resource_path
 
 # Assumed source profile for color management — NOT a real working space. RAW is
 # decoded output_color=raw (camera-native linear RGB) and the pipeline operates on
-# those numbers directly; nothing ever converts *into* this space. Adobe RGB is only
+# those numbers directly; nothing ever converts *into* this space. ProPhoto is only
 # the source profile assumed at the boundaries: export converts FROM it to the chosen
 # target (and embeds it), and the preview is color-managed FROM it to the display.
-WORKING_COLOR_SPACE = ColorSpace.ADOBE_RGB.value
+WORKING_COLOR_SPACE = ColorSpace.PROPHOTO.value
 
 
 class ColorSpaceRegistry:
