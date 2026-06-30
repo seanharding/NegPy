@@ -4,7 +4,7 @@ import sys
 from typing import TYPE_CHECKING, Callable, Optional
 
 from PyQt6.QtCore import QEvent, QObject, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen, QTextOption
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QTextBrowser, QVBoxLayout, QWidget
 
 from negpy.desktop.view.styles.theme import THEME
@@ -199,8 +199,13 @@ class TutorialOverlay(QWidget):
         doc = self._body_lbl.document()
         if doc is not None:
             doc.setDefaultFont(self._body_lbl.font())
-            doc.setTextWidth(self._POPUP_W - 32)
-            content_h = int(doc.size().height()) + 8
+            opt = QTextOption()
+            opt.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+            doc.setDefaultTextOption(opt)
+            margin = int(doc.documentMargin())
+            # -2: the popup QFrame's 1px stylesheet border eats one pixel on each side.
+            doc.setTextWidth(self._POPUP_W - 32 - 2 - 2 * margin)
+            content_h = int(doc.size().height()) + 2 * margin
             max_h = max(80, self._win.height() - 220)
             self._body_lbl.setFixedHeight(min(content_h, max_h))
         self._prev_btn.setVisible(idx > 0)
