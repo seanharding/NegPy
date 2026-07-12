@@ -32,6 +32,23 @@ def grid_interior_fractions(divisions: int) -> List[float]:
     return [i / divisions for i in range(1, divisions)]
 
 
+def _distance_to_polyline(pos: QPointF, pts: List[QPointF]) -> float:
+    """Shortest screen distance from `pos` to a polyline (a single point counts)."""
+    if not pts:
+        return float("inf")
+    if len(pts) == 1:
+        return math.hypot(pos.x() - pts[0].x(), pos.y() - pts[0].y())
+    best = float("inf")
+    for a, b in zip(pts, pts[1:]):
+        abx, aby = b.x() - a.x(), b.y() - a.y()
+        apx, apy = pos.x() - a.x(), pos.y() - a.y()
+        denom = abx * abx + aby * aby
+        t = 0.0 if denom <= 1e-12 else max(0.0, min(1.0, (apx * abx + apy * aby) / denom))
+        cx, cy = a.x() + t * abx, a.y() + t * aby
+        best = min(best, math.hypot(pos.x() - cx, pos.y() - cy))
+    return best
+
+
 def feathered_mask_image(local_pts: List[Tuple[float, float]], w: int, h: int, sigma_px: float, color: QColor, max_alpha: int) -> QImage:
     """Tinted premultiplied-alpha QImage of a feathered polygon.
 
@@ -148,6 +165,11 @@ class CanvasOverlay(QWidget):
             sc = QShortcut(QKeySequence(key), self)
             sc.setContext(Qt.ShortcutContext.WidgetShortcut)
             sc.activated.connect(self._finish_draw_if_active)
+
+        # Backspace steps back one click-point of the in-progress scratch polyline.
+        self._backspace_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Backspace), self)
+        self._backspace_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+        self._backspace_shortcut.activated.connect(self.undo_last_scratch_point)
 
         if sys.platform == "win32":
             self.setAttribute(Qt.WidgetAttribute.WA_StaticContents, False)
@@ -532,12 +554,12 @@ class CanvasOverlay(QWidget):
         """
         Inverse UV-grid lookup: raw-normalised (0-1) -> screen position.
 
-        Downsamples the grid before the nearest-neighbour search so this stays
-        fast even for large preview buffers. `buckets` trades precision for
-        speed: the default is fine for one-shot mask-vertex rendering, but
-        anything redrawn continuously while being dragged (e.g. crop handles)
-        needs a much finer grid or the on-screen point visibly snaps between
-        buckets instead of tracking the cursor.
+        Two-stage nearest-neighbour: a coarse pass over a `buckets`-decimated grid
+        locates the neighbourhood cheaply, then a full-resolution pass over that
+        bucket's window pins the exact pixel. The coarse pass alone snapped results
+        to bucket centres (± step/2 grid pixels ≈ 3-20px depending on preview size,
+        magnified by zoom) — enough to draw a heal outline entirely off the healed
+        spot even though the heal itself landed exactly where clicked.
         """
         h_uv, w_uv = uv_grid.shape[:2]
         step = max(1, h_uv // buckets)
@@ -546,8 +568,18 @@ class CanvasOverlay(QWidget):
         idx = int(np.argmin(dist))
         h_s, w_s = small.shape[:2]
         vy, vx = divmod(idx, w_s)
-        nx = min((vx * step + step // 2) / w_uv, 1.0)
-        ny = min((vy * step + step // 2) / h_uv, 1.0)
+
+        # Refine: exact search across the coarse cell and its neighbours.
+        py, px = vy * step, vx * step
+        y0, y1 = max(0, py - step), min(h_uv, py + step + 1)
+        x0, x1 = max(0, px - step), min(w_uv, px + step + 1)
+        window = uv_grid[y0:y1, x0:x1]
+        wdist = (window[..., 0] - rx) ** 2 + (window[..., 1] - ry) ** 2
+        widx = int(np.argmin(wdist))
+        wy, wx = divmod(widx, window.shape[1])
+
+        nx = min((x0 + wx + 0.5) / w_uv, 1.0)
+        ny = min((y0 + wy + 0.5) / h_uv, 1.0)
         return QPointF(
             self._view_rect.x() + nx * self._view_rect.width(),
             self._view_rect.y() + ny * self._view_rect.height(),
@@ -939,6 +971,12 @@ class CanvasOverlay(QWidget):
             event.accept()
             return
 
+        # Tool placements are left-click only: right-click must fall through to the
+        # context menu without dropping a lasso vertex, scratch point, or heal.
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+
         if self._tool_mode == ToolMode.LOCAL_DRAW:
             self._handle_lasso_press(event.position())
             event.accept()
@@ -1220,6 +1258,54 @@ class CanvasOverlay(QWidget):
             self._finish_scratch()
         elif self._tool_mode == ToolMode.LOCAL_DRAW and self._lasso_drawing and len(self._lasso_pts) >= 3:
             self._finish_lasso()
+
+    def has_scratch_points(self) -> bool:
+        return bool(self._scratch_pts)
+
+    def confirm_scratch(self) -> None:
+        """Commit the in-progress scratch polyline (same as double-click / Enter)."""
+        if self._tool_mode == ToolMode.SCRATCH_PICK and self._scratch_pts:
+            self._finish_scratch()
+
+    def undo_last_scratch_point(self) -> None:
+        """Step back one click-point of the in-progress scratch polyline."""
+        if self._tool_mode == ToolMode.SCRATCH_PICK and self._scratch_pts:
+            self._scratch_pts.pop()
+            self.update()
+
+    def heal_hit_test(self, pos: QPointF) -> Optional[Tuple[str, int]]:
+        """Placed heal under `pos`, as ("stroke"|"spot", index), or None.
+
+        Mirrors the geometry `_draw_placed_heals` renders: raw-normalized points
+        mapped to screen through the uv grid, hit within the brush band radius
+        (plus a small slop so thin strokes stay clickable).
+        """
+        conf = self.state.config.retouch
+        if not (conf.manual_heal_strokes or conf.manual_dust_spots):
+            return None
+        with self.state.metrics_lock:
+            uv_grid = self.state.last_metrics.get("uv_grid")
+        if uv_grid is None:
+            return None
+
+        slop = 4.0
+        best: Optional[Tuple[str, int]] = None
+        best_dist = float("inf")
+        for i, (points, size, _dx, _dy) in enumerate(conf.manual_heal_strokes):
+            screen_pts = [self._raw_to_screen(px, py, uv_grid) for px, py in points]
+            radius = max(2.0, self._brush_screen_radius(size)) + slop
+            d = _distance_to_polyline(pos, screen_pts)
+            if d <= radius and d < best_dist:
+                best = ("stroke", i)
+                best_dist = d
+        for i, (rx, ry, size) in enumerate(conf.manual_dust_spots):
+            center = self._raw_to_screen(rx, ry, uv_grid)
+            radius = max(2.0, self._brush_screen_radius(size)) + slop
+            d = math.hypot(pos.x() - center.x(), pos.y() - center.y())
+            if d <= radius and d < best_dist:
+                best = ("spot", i)
+                best_dist = d
+        return best
 
     def _finish_scratch(self) -> None:
         pts = self._scratch_pts

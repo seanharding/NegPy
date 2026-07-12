@@ -540,7 +540,8 @@ class ControlsPanel(QWidget):
 
         ret.pick_dust_btn.setToolTip(
             tooltip_with_shortcut(
-                "Toggle manual heal brush — click dust spots in the preview to paint them out one at a time",
+                "Toggle manual heal brush — click dust spots in the preview to paint them out one at a time. "
+                "Right-click an existing heal overlay to delete it",
                 "pick_dust",
             )
         )
@@ -729,7 +730,10 @@ class ControlsPanel(QWidget):
         )
 
         ret = cfg.retouch
-        retouch_count = int(ret.dust_remove) + len(ret.manual_dust_spots)
+        # Heal-tool clicks and scratch polylines both commit into manual_heal_strokes
+        # (manual_dust_spots is the legacy list), so count them or the Finish tab's
+        # edited dot never lights for healed images.
+        retouch_count = int(ret.dust_remove) + len(ret.manual_dust_spots) + len(ret.manual_heal_strokes)
 
         _fin = _DEFAULT_FINISH
         fin = cfg.finish
@@ -758,3 +762,8 @@ class ControlsPanel(QWidget):
         self.geometry_sidebar.sync_ui()
         self.local_sidebar.sync_ui()
         self.process_sidebar.sync_ui()
+        # Retouch hosts two tool toggles (heal + scratch); without this sync,
+        # activating one left the other highlighted as if both were live. The
+        # colour sidebar's WB picker had the same latent stale-check bug.
+        self.retouch_sidebar.sync_ui()
+        self.colour_sidebar.sync_ui()
