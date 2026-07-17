@@ -29,7 +29,7 @@ class FinishSidebar(BaseSidebar):
         self.layout.addWidget(section_subheader("FILED CARRIER"))
         self.carrier_width_slider = CompactSlider("Width", 0.0, 5.0, conf.carrier_width)
         self.carrier_width_slider.setToolTip("Filed-out negative carrier: a black rebate frame with a rough inner edge. 0 = off")
-        self.carrier_rough_slider = CompactSlider("Rough", 0.0, 1.0, conf.carrier_rough)
+        self.carrier_rough_slider = CompactSlider("Roughness", 0.0, 1.0, conf.carrier_rough)
         row_carrier = QHBoxLayout()
         row_carrier.addWidget(self.carrier_width_slider)
         row_carrier.addWidget(self.carrier_rough_slider)
