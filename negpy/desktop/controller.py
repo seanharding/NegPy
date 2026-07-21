@@ -2788,6 +2788,9 @@ class AppController(QObject):
             Q_ARG(int, cs.contact_sheet_gap),
             Q_ARG(int, cs.contact_sheet_margin),
             Q_ARG(int, cs.contact_sheet_max_tiles),
+            Q_ARG(bool, cs.contact_sheet_show_labels),
+            Q_ARG(str, cs.contact_sheet_background_color),
+            Q_ARG(str, cs.contact_sheet_label_color),
         )
 
     def _write_edit_sidecars(self, files: list[dict]) -> int:
