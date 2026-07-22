@@ -21,6 +21,7 @@ from negpy.features.process.models import ProcessMode
 from negpy.features.process.logic import linear_raw_token
 from negpy.features.exposure.models import RenderIntent
 from negpy.features.flatfield.logic import apply_flatfield, flatfield_token
+from negpy.features.process.scanner import apply_sensor_correction, scanner_token
 from negpy.features.retouch.logic import (
     apply_hair_inpaint,
     apply_ir_attenuation,
@@ -292,6 +293,10 @@ class ImageProcessor:
         # canvas as one frame would stretch the gain map across the seam.
         if not skip_flatfield and not settings.stitch.stitch_enabled:
             img = apply_flatfield(img, settings.flatfield)
+        # Scanner (sensor+light) crosstalk unmix on the linear capture — a source
+        # correction like flat-field, applied once per render here (not folded into
+        # _load_source_f32, so decode_source_negative stays raw for calibration).
+        img = apply_sensor_correction(img, settings.process.scanner_matrix)
         h_orig, w_cols = img.shape[:2]
         # Fold the buffer resolution into source_hash: toggling HQ re-decodes the same
         # file at full resolution with unchanged settings, so without this the engine
@@ -303,6 +308,7 @@ class ImageProcessor:
             + rgbscan_token(settings.rgbscan)
             + stitch_token(settings.stitch)
             + linear_raw_token(settings.process)
+            + scanner_token(settings.process)
             + ir_bake_token(settings.retouch, ir_buffer is not None)
         )
 
@@ -477,6 +483,14 @@ class ImageProcessor:
         self._source_cache_key = cache_key
         self._source_cache_value = result
         return result
+
+    def decode_source_negative(self, file_path: str, params: WorkspaceConfig, fast: bool = True) -> np.ndarray:
+        """Flatfield-corrected, EXIF-oriented linear capture for a file — the raw,
+        pre-scanner-correction buffer. Used by scanner calibration to measure bare-light
+        exposures (which is why the scanner unmix is applied in run_pipeline, not here).
+        """
+        f32, _ir, _cs = self._load_source_f32(file_path, params, fast_decode=fast)
+        return f32
 
     def _decode_oriented_f32(
         self, file_path: str, params: WorkspaceConfig, fast_decode: bool = False

@@ -33,6 +33,7 @@ APP_CONFIG = AppConfig(
     cache_dir=os.path.join(BASE_USER_DIR, "cache"),
     user_icc_dir=os.path.join(BASE_USER_DIR, "icc"),
     crosstalk_dir=os.path.join(BASE_USER_DIR, "crosstalk"),
+    scanner_dir=os.path.join(BASE_USER_DIR, "scanner"),
     gear_dir=os.path.join(BASE_USER_DIR, "gear"),
     contact_sheet_templates_dir=os.path.join(BASE_USER_DIR, "contact_sheets"),
     default_export_dir=os.path.join(BASE_USER_DIR, "export"),

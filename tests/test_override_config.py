@@ -29,6 +29,7 @@ def _make_app_config(**kwargs) -> AppConfig:
         cache_dir="/tmp/cache",
         user_icc_dir="/tmp/icc",
         crosstalk_dir="/tmp/crosstalk",
+        scanner_dir="/tmp/scanner",
         gear_dir="/tmp/gear",
         contact_sheet_templates_dir="/tmp/contact_sheets",
         default_export_dir="/tmp/export",

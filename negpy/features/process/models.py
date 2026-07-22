@@ -68,6 +68,13 @@ class ProcessConfig:
     crosstalk_matrix: Optional[tuple] = None
     crosstalk_profile: str = "Default"
 
+    # Scanner (sensor + light) crosstalk correction, applied to the LINEAR capture
+    # before geometry/log — a fixed sensor-filter property, not film-specific,
+    # calibrated from three bare-light R/G/B exposures (features/process/scanner.py).
+    # 9 floats (row-major), baked from a scanner profile; None = off (no built-in default).
+    scanner_matrix: Optional[tuple] = None
+    scanner_profile: str = "None"
+
     lock_bounds: bool = False
 
     roll_name: Optional[str] = None
@@ -82,6 +89,8 @@ class ProcessConfig:
         object.__setattr__(self, "local_ceils", tuple(self.local_ceils))
         if self.crosstalk_matrix is not None:
             object.__setattr__(self, "crosstalk_matrix", tuple(self.crosstalk_matrix))
+        if self.scanner_matrix is not None:
+            object.__setattr__(self, "scanner_matrix", tuple(self.scanner_matrix))
         if self.analysis_rect is not None:
             object.__setattr__(self, "analysis_rect", tuple(self.analysis_rect))
 
