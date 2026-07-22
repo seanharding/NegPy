@@ -84,6 +84,19 @@ def test_dialog_marks_and_save(tmp_path):
     assert "Chart Test" in CrosstalkProfiles.list_profiles()
 
 
+def test_role_combo_edits_selected_patch():
+    from negpy.desktop.view.widgets.chart_calibration_dialog import ChartCalibrationDialog
+
+    img, rects = _chart_negative()
+    dlg = ChartCalibrationDialog(lambda: _frame(img))
+    for x, y, w, h in rects:
+        dlg._on_patch_added(x, y, w, h)
+    dlg.patch_list.setCurrentRow(2)  # B (added R,G,B,C,M,Y in order)
+    assert dlg._patches[2][0] == "B"
+    dlg.role_combo.setCurrentText("neutral")  # editing the dropdown retags the selected patch
+    assert dlg._patches[2][0] == "neutral"
+
+
 def test_dialog_handles_no_frame():
     from negpy.desktop.view.widgets.chart_calibration_dialog import ChartCalibrationDialog
 

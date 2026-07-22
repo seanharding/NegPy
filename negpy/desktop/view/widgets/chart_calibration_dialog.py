@@ -12,8 +12,9 @@ from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 from PyQt6.QtCore import Qt, QThread
-from PyQt6.QtGui import QGuiApplication, QImage, QPixmap
+from PyQt6.QtGui import QColor, QGuiApplication, QIcon, QImage, QPixmap
 from PyQt6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDialog,
     QHBoxLayout,
@@ -22,13 +23,14 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from negpy.desktop.view.styles.theme import THEME
-from negpy.desktop.view.widgets.patch_marker_label import PatchMarkerLabel
+from negpy.desktop.view.widgets.patch_marker_label import ROLE_COLORS, PatchMarkerLabel
 from negpy.desktop.workers.calibrate import CalibrateTask, CrosstalkCalibrateWorker
 from negpy.features.process.calibration import calibrate_from_marks
 from negpy.features.process.chart_optimize import OFF_DIAGONAL
@@ -92,6 +94,18 @@ def negative_to_pixmap(negative: np.ndarray) -> QPixmap:
     return QPixmap.fromImage(img.copy())  # copy: detach from the temporary numpy buffer
 
 
+def _role_icon(role: str) -> QIcon:
+    """A small colour swatch for a role — the same colour its box gets on the image."""
+    pm = QPixmap(14, 14)
+    pm.fill(QColor(ROLE_COLORS.get(role, ROLE_COLORS["neutral"])))
+    return QIcon(pm)
+
+
+def _role_label(role: str) -> str:
+    names = {"R": "Red", "G": "Green", "B": "Blue", "C": "Cyan", "M": "Magenta", "Y": "Yellow"}
+    return f"{role} — {names[role]}" if role in names else "Neutral"
+
+
 class ChartCalibrationDialog(QDialog):
     """Mark chart patches, solve, and save the result as a crosstalk profile."""
 
@@ -143,16 +157,26 @@ class ChartCalibrationDialog(QDialog):
         self.patch_list.currentRowChanged.connect(self._on_row_changed)
         sl.addWidget(self.patch_list, 1)
 
-        del_row = QHBoxLayout()
-        self.delete_btn = QPushButton("Remove patch")
+        edit_row = QHBoxLayout()
+        edit_row.addWidget(QLabel("Role"))
+        self.role_combo = QComboBox()
+        self.role_combo.addItems(_ROLES)
+        self.role_combo.currentTextChanged.connect(self._on_role_combo_changed)
+        self.delete_btn = QPushButton("Remove")
         self.delete_btn.clicked.connect(self._on_delete)
-        del_row.addWidget(self.delete_btn)
-        del_row.addStretch()
-        sl.addLayout(del_row)
+        edit_row.addWidget(self.role_combo, 1)
+        edit_row.addWidget(self.delete_btn)
+        sl.addLayout(edit_row)
 
         self.solve_btn = QPushButton("Solve")
         self.solve_btn.clicked.connect(self._on_solve_clicked)
         sl.addWidget(self.solve_btn)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)  # indeterminate "busy" — solve time isn't known ahead
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setVisible(False)
+        sl.addWidget(self.progress_bar)
 
         self.result_label = QLabel("")
         self.result_label.setWordWrap(True)
@@ -222,13 +246,20 @@ class ChartCalibrationDialog(QDialog):
 
     def _on_row_changed(self, row: int) -> None:
         self.marker.set_selected(row)
-        self.delete_btn.setEnabled(0 <= row < len(self._patches))
+        valid = 0 <= row < len(self._patches)
+        self.delete_btn.setEnabled(valid)
+        self.role_combo.setEnabled(valid)
+        if valid:
+            self.role_combo.blockSignals(True)  # programmatic sync, not a user edit
+            self.role_combo.setCurrentText(self._patches[row][0])
+            self.role_combo.blockSignals(False)
 
-    def _on_role_changed(self, index: int, role: str) -> None:
-        if 0 <= index < len(self._patches):
-            self._patches[index][0] = role
+    def _on_role_combo_changed(self, role: str) -> None:
+        row = self.patch_list.currentRow()
+        if 0 <= row < len(self._patches) and self._patches[row][0] != role:
+            self._patches[row][0] = role
             self._invalidate_result()
-            self.marker.set_patches([(p[0], p[1]) for p in self._patches])
+            self._rebuild_list(select=row)
 
     def _on_delete(self) -> None:
         row = self.patch_list.currentRow()
@@ -240,15 +271,8 @@ class ChartCalibrationDialog(QDialog):
     def _rebuild_list(self, select: int = -1) -> None:
         self.patch_list.blockSignals(True)
         self.patch_list.clear()
-        for i, (role, _rect) in enumerate(self._patches):
-            item = QListWidgetItem()
-            self.patch_list.addItem(item)
-            combo = QComboBox()
-            combo.addItems(_ROLES)
-            combo.setCurrentText(role)
-            combo.currentTextChanged.connect(lambda r, idx=i: self._on_role_changed(idx, r))
-            item.setSizeHint(combo.sizeHint())
-            self.patch_list.setItemWidget(item, combo)
+        for role, _rect in self._patches:
+            self.patch_list.addItem(QListWidgetItem(_role_icon(role), _role_label(role)))
         self.patch_list.blockSignals(False)
         self.marker.set_patches([(p[0], p[1]) for p in self._patches])
         if 0 <= select < len(self._patches):
@@ -297,12 +321,20 @@ class ChartCalibrationDialog(QDialog):
         self._matrix = None
         self.solve_btn.setText("Cancel")
         self._set_busy(True)
-        self.result_label.setText("Optimizing… rendering candidate matrices")
+        self.progress_bar.setVisible(True)
+        self.result_label.setText(
+            "Solving… rendering the chart repeatedly to tune the matrix (about a minute).<br>"
+            "<span style='color:%s'>The window may be sluggish while this runs — that's expected.</span>" % THEME.text_muted
+        )
         self.result_label.setVisible(True)
+        # Force the busy state to paint *now*: once the worker starts, its GIL-holding
+        # renders would otherwise stop the main thread from ever drawing it, making the
+        # click look ignored.
+        QApplication.processEvents()
         self._thread.start()
 
     def _on_opt_progress(self, evals: int, best: float) -> None:
-        self.result_label.setText(f"Optimizing… best chroma error {best:.1f} (render {evals})")
+        self.result_label.setText(f"Optimizing… best colour error {best:.1f} so far ({evals} renders)")
 
     def _on_opt_finished(self, matrix: object, error: float, warnings: tuple) -> None:
         self._teardown_thread()
@@ -323,6 +355,7 @@ class ChartCalibrationDialog(QDialog):
         self._optimizing = False
         self.solve_btn.setText("Solve")
         self.solve_btn.setEnabled(True)
+        self.progress_bar.setVisible(False)
         self._set_busy(False)
         if self._thread is not None:
             self._thread.quit()
@@ -335,7 +368,7 @@ class ChartCalibrationDialog(QDialog):
 
     def _set_busy(self, busy: bool) -> None:
         """Freeze editing while the optimizer runs (marks feed the in-flight task)."""
-        for w in (self.marker, self.patch_list, self.delete_btn, self.name_edit):
+        for w in (self.marker, self.patch_list, self.delete_btn, self.role_combo, self.name_edit):
             w.setEnabled(not busy)
         if busy:
             self.save_btn.setEnabled(False)

@@ -7,6 +7,7 @@ and measures patch chroma, so the optimizer minimizes the *rendered* colour erro
 """
 
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Tuple
 
@@ -101,6 +102,12 @@ class CrosstalkCalibrateWorker(QObject):
                     s = max(2, int(min(x1 - x0, y1 - y0) * min(w, h) * 0.25))
                     rgb = np.median(img[max(0, cy - s) : cy + s, max(0, cx - s) : cx + s, :3].reshape(-1, 3), axis=0)
                     out[i] = _srgb_to_ab(rgb)
+                # The CPU render's njit kernels hold the GIL for the whole call; without a
+                # yield between renders the UI thread's event loop starves and the OS shows a
+                # beachball. This sleep hands the GIL back long enough for the main thread to
+                # complete an event-loop pass (process events + repaint) so the dialog stays
+                # responsive and its progress keeps updating.
+                time.sleep(0.02)
                 return out
 
             def on_progress(evals: int, best: float) -> bool:
