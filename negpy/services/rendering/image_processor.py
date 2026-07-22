@@ -478,6 +478,16 @@ class ImageProcessor:
         self._source_cache_value = result
         return result
 
+    def decode_source_negative(self, file_path: str, params: WorkspaceConfig, fast: bool = True) -> np.ndarray:
+        """Flatfield-corrected, EXIF-oriented linear negative for the current file.
+
+        This is the pre-crosstalk, pre-normalization domain crosstalk operates in,
+        so it's what chart calibration samples. Independent of the GPU/CPU render
+        path; reuses the source-decode cache, so it's cheap right after a render.
+        """
+        f32, _ir, _cs = self._load_source_f32(file_path, params, fast_decode=fast)
+        return f32
+
     def _decode_oriented_f32(
         self, file_path: str, params: WorkspaceConfig, fast_decode: bool = False
     ) -> Tuple[np.ndarray, Optional[np.ndarray], str]:

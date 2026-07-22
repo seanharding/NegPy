@@ -321,12 +321,53 @@ class ProcessSidebar(BaseSidebar):
 
         conf = self.state.config.process
         self._crosstalk_snapshot = (conf.crosstalk_profile, conf.crosstalk_matrix, conf.crosstalk_strength)
-        dlg = CrosstalkEditorDialog(conf.crosstalk_profile, conf.crosstalk_strength, parent=self)
+        dlg = CrosstalkEditorDialog(
+            conf.crosstalk_profile, conf.crosstalk_strength, parent=self, negative_provider=self._prepare_calibration_frame
+        )
         dlg.matrix_previewed.connect(self._on_crosstalk_preview)
         dlg.profiles_changed.connect(self.sync_ui)
         dlg.finished.connect(lambda result: self._on_crosstalk_editor_finished(dlg, result))
         self._crosstalk_dialog = dlg  # keep a reference so the modeless dialog isn't GC'd
         dlg.show()
+
+    def _prepare_calibration_frame(self):
+        """Build a CalibrationFrame for the chart-calibration dialog: a canvas-matching
+        positive preview to mark on, the pre-crosstalk negative it's rendered from, and the
+        geometry-disabled config the optimizer re-renders with. Geometry (flip/rotate/crop)
+        is applied once to the decoded negative so boxes map 1:1 onto both the preview and
+        the optimized frame. Returns None when no file is open; the preview is None (dialog
+        falls back to a raw positive) if the render fails. Distortion is skipped (rare on
+        charts, and it would break the 1:1 map)."""
+        path = self.state.current_file_path
+        if not path:
+            return None
+        from dataclasses import replace
+
+        import numpy as np
+
+        from negpy.desktop.view.widgets.chart_calibration_dialog import CalibrationFrame
+        from negpy.domain.interfaces import PipelineContext
+        from negpy.features.geometry.models import GeometryConfig
+        from negpy.features.geometry.processor import CropProcessor, GeometryProcessor
+        from negpy.infrastructure.display.color_mgmt import apply_display_transform
+        from negpy.infrastructure.display.color_spaces import WORKING_COLOR_SPACE
+        from negpy.kernel.image.logic import float_to_uint8
+        from negpy.services.rendering.image_processor import ImageProcessor
+
+        config = self.state.config
+        ip = ImageProcessor()
+        raw = ip.decode_source_negative(path, config, fast=True)
+        ctx = PipelineContext(scale_factor=1.0, original_size=raw.shape[:2], process_mode=config.process.process_mode)
+        sampling = CropProcessor(config.geometry).process(GeometryProcessor(config.geometry, 0.0).process(raw, ctx), ctx)
+        flat = replace(config, geometry=GeometryConfig(), flatfield=replace(config.flatfield, apply=False))
+        try:
+            positive, _ = ip.run_pipeline(
+                sampling, flat, path, render_size_ref=1400.0, prefer_gpu=False, skip_flatfield=True, readback_metrics=False
+            )
+            preview = float_to_uint8(apply_display_transform(np.asarray(positive)[:, :, :3], WORKING_COLOR_SPACE))
+        except Exception:
+            preview = None  # dialog renders a raw positive from the negative instead
+        return CalibrationFrame(negative=sampling, base_config=flat, source_hash=path, preview_rgb=preview)
 
     def _on_crosstalk_preview(self, matrix: object, strength: float) -> None:
         self.update_config_section(

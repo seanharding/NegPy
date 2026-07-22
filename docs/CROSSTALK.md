@@ -104,6 +104,15 @@ have to hand-edit TOML:
   diagonal redundant, so only the six mixing terms are editable. The **Preview strength**
   slider only controls how strongly the matrix previews here — it's view-only; use the
   sidebar **Separation** slider to actually apply it.
+- **Calibrate from chart…** derives a brand-new profile from a photo of a **SpyderCheckr**
+  colour chart instead of a datasheet. Open the chart as the current photo, then drag a box
+  over each patch and tag it (the six primaries R/G/B/C/M/Y; black/white/grey help). **Solve**
+  then optimizes the matrix *against the rendered result* — it renders the chart through the
+  pipeline many times, minimizing the colour error of the rendered patches versus the
+  SpyderCheckr's published values (takes ~a minute; cancellable). Because it targets the final
+  image rather than a density-domain proxy, it reliably matches or beats a hand-tuned matrix.
+  Name it and save — it lands in the list like any other profile. It still only corrects what
+  a 3×3 unmix can (hue/separation), not tone.
 - **Make Editable Copy** clones the selected (locked) matrix into an editable profile.
 - **Save** writes the profile as a `.toml` into `<Documents>/NegPy/crosstalk/` — the same
   folder profiles are read from — so it shows up in the dropdown.

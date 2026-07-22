@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -92,10 +92,11 @@ class CrosstalkEditorDialog(QDialog):
     matrix_previewed = pyqtSignal(object, float)  # (flat 9-float matrix, preview strength)
     profiles_changed = pyqtSignal()
 
-    def __init__(self, current_profile: str, current_strength: float, parent=None):
+    def __init__(self, current_profile: str, current_strength: float, parent=None, negative_provider: Optional[Callable] = None):
         super().__init__(parent)
         self._selected_name: Optional[str] = None
         self._updating = False
+        self._negative_provider = negative_provider
 
         self.setWindowTitle("Crosstalk Matrices")
         self.resize(680, 620)
@@ -142,6 +143,13 @@ class CrosstalkEditorDialog(QDialog):
         btns.addWidget(self.delete_btn)
         btns.addStretch()
         left_layout.addLayout(btns)
+
+        self.calibrate_btn = QPushButton(" Calibrate from chart…")
+        self.calibrate_btn.setIcon(qta.icon("fa5s.vials", color=THEME.text_primary))
+        self.calibrate_btn.setToolTip("Derive a new profile by marking colour-chart patches on the current photo")
+        self.calibrate_btn.clicked.connect(self._open_calibration)
+        self.calibrate_btn.setEnabled(self._negative_provider is not None)
+        left_layout.addWidget(self.calibrate_btn)
 
         splitter.addWidget(left)
 
@@ -382,6 +390,16 @@ class CrosstalkEditorDialog(QDialog):
         CrosstalkProfiles.save(name, identity)
         self.profiles_changed.emit()
         self._reload_list(select=name)
+
+    def _open_calibration(self) -> None:
+        if self._negative_provider is None:
+            return
+        from negpy.desktop.view.widgets.chart_calibration_dialog import ChartCalibrationDialog
+
+        dlg = ChartCalibrationDialog(self._negative_provider, parent=self)
+        if dlg.exec() and dlg.saved_profile_name:
+            self.profiles_changed.emit()
+            self._reload_list(select=dlg.saved_profile_name)
 
     def _on_copy(self) -> None:
         if self._selected_name is None:
