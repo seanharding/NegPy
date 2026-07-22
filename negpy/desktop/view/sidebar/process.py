@@ -18,6 +18,7 @@ from negpy.desktop.view.widgets.sliders import CompactSlider
 from negpy.features.exposure.models import EXPOSURE_CONSTANTS
 from negpy.features.process.models import ProcessMode, invalidate_local_bounds
 from negpy.services.assets.crosstalk import CrosstalkProfiles
+from negpy.services.assets.scanner import ScannerProfiles
 
 # Luma Range Clip slider mapping: positions 0..100 clip the histogram tails; negative
 # positions -100..0 map to an outward log-density margin (gentler-than-zero stretch).
@@ -201,6 +202,26 @@ class ProcessSidebar(BaseSidebar):
         self.crosstalk_strength_slider = CompactSlider("Separation", 0.0, 1.0, conf.crosstalk_strength, has_neutral=True)
         self.layout.addWidget(self.crosstalk_strength_slider)
 
+        self.layout.addWidget(section_subheader("SCANNER"))
+        scanner_row = QHBoxLayout()
+        self.scanner_label = field_label("Profile")
+        self.scanner_combo = QComboBox()
+        self.scanner_combo.addItems(ScannerProfiles.list_profiles())
+        self.scanner_combo.setCurrentText(conf.scanner_profile)
+        self.scanner_combo.setToolTip(
+            "<table width='280'><tr><td>"
+            "Scanner (sensor + light) crosstalk correction: un-mixes the camera's cross-channel "
+            "response in the LINEAR capture, before inversion — a fixed property of your sensor + "
+            "light, independent of film. Calibrate it from three bare-light R/G/B exposures. 'None' "
+            "is off. Re-run Batch Analysis after changing this."
+            "</td></tr></table>"
+        )
+        self.calibrate_scanner_btn = self._icon_action("fa5s.vials", "Calibrate scanner from three bare-light R/G/B exposures", width=32)
+        scanner_row.addWidget(self.scanner_label)
+        scanner_row.addWidget(self.scanner_combo, 1)
+        scanner_row.addWidget(self.calibrate_scanner_btn)
+        self.layout.addLayout(scanner_row)
+
         self.normalize_e6_btn = QPushButton(" Normalize")
         self.normalize_e6_btn.setCheckable(True)
         self.normalize_e6_btn.setIcon(qta.icon("fa5s.magic", color=THEME.text_primary))
@@ -248,6 +269,8 @@ class ProcessSidebar(BaseSidebar):
 
         self.crosstalk_combo.currentTextChanged.connect(self._on_crosstalk_profile_changed)
         self.manage_crosstalk_btn.clicked.connect(self._open_crosstalk_editor)
+        self.scanner_combo.currentTextChanged.connect(self._on_scanner_profile_changed)
+        self.calibrate_scanner_btn.clicked.connect(self._open_scanner_calibration)
         self.crosstalk_strength_slider.valueChanged.connect(lambda v: self._on_crosstalk_strength_changed(v, persist=False))
         self.crosstalk_strength_slider.valueCommitted.connect(lambda v: self._on_crosstalk_strength_changed(v, persist=True))
         self.normalize_e6_btn.toggled.connect(self._on_normalize_e6_toggled)
@@ -315,6 +338,28 @@ class ProcessSidebar(BaseSidebar):
             crosstalk_strength=val,
             **invalidate_local_bounds(self.state.config.process),
         )
+
+    def _on_scanner_profile_changed(self, name: str) -> None:
+        # Bake the matrix so saved edits are reproducible; clear per-frame bounds since the
+        # linear sensor correction changes what the normalization meters read.
+        matrix = ScannerProfiles.get_matrix(name)
+        self.update_config_section(
+            "process",
+            persist=True,
+            render=True,
+            scanner_profile=name,
+            scanner_matrix=tuple(matrix) if matrix is not None else None,
+            **invalidate_local_bounds(self.state.config.process),
+        )
+
+    def _open_scanner_calibration(self) -> None:
+        from negpy.desktop.view.widgets.scanner_calibration_dialog import ScannerCalibrationDialog
+
+        dlg = ScannerCalibrationDialog(self.state.config, parent=self)
+        dlg.exec()
+        if dlg.saved_profile_name:  # the dialog saves then closes, so apply on saved (not accept)
+            self._on_scanner_profile_changed(dlg.saved_profile_name)  # bake + apply the new profile
+            self.sync_ui()  # rebuild the combo (now includes it) and select it
 
     def _open_crosstalk_editor(self) -> None:
         from negpy.desktop.view.widgets.crosstalk_editor_dialog import CrosstalkEditorDialog
@@ -450,6 +495,13 @@ class ProcessSidebar(BaseSidebar):
                 self.crosstalk_combo.addItems(profiles)
             self.crosstalk_combo.setCurrentText(conf.crosstalk_profile)
             self.crosstalk_strength_slider.setValue(conf.crosstalk_strength)
+
+            scanner_profiles = ScannerProfiles.list_profiles()
+            if scanner_profiles != [self.scanner_combo.itemText(i) for i in range(self.scanner_combo.count())]:
+                self.scanner_combo.clear()
+                self.scanner_combo.addItems(scanner_profiles)
+            self.scanner_combo.setCurrentText(conf.scanner_profile)
+
             is_bw = conf.process_mode == ProcessMode.BW
             self.crosstalk_label.setVisible(not is_bw)
             self.crosstalk_combo.setVisible(not is_bw)
@@ -499,6 +551,7 @@ class ProcessSidebar(BaseSidebar):
             self.black_point_slider,
             self.crosstalk_combo,
             self.crosstalk_strength_slider,
+            self.scanner_combo,
             self.normalize_e6_btn,
         ]
         for w in widgets:
