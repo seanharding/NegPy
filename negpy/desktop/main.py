@@ -256,9 +256,19 @@ def main() -> None:
         app.setApplicationName("NegPy")
         app.setStyle(_AppStyle("Fusion"))
 
-        icon_path = get_resource_path("media/icons/icon.png")
-        if os.path.exists(icon_path):
-            app.setWindowIcon(QIcon(icon_path))
+        # macOS draws the Dock tile from the bundle icon and gives it the system
+        # rounded-rect container. setWindowIcon overrides that tile through
+        # NSApp.applicationIconImage, which paints the image raw and gets no container,
+        # so the packaged app has to leave the tile alone. A dev run has no bundle to
+        # take an icon from and still needs one set.
+        if sys.platform == "darwin":
+            icon_source = "" if getattr(sys, "frozen", False) else "media/icons/icon.icns"
+        else:
+            icon_source = "media/icons/icon.png"
+        if icon_source:
+            icon_path = get_resource_path(icon_source)
+            if os.path.exists(icon_path):
+                app.setWindowIcon(QIcon(icon_path))
 
         if os.path.exists(get_resource_path("negpy/desktop/view/styles/modern_dark.qss")):
             from negpy.desktop.view.styles.templates import load_stylesheet

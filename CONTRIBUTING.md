@@ -166,3 +166,10 @@ For an Intel build from a compatible macOS environment, run:
 ```bash
 NEGPY_MACOS_ARCH=x86_64 make build
 ```
+
+The macOS bundle icon comes from `media/icons/icon.icns`, which is committed. After you
+edit `media/icons/icon.svg`, regenerate it on a Mac and commit the result:
+
+```bash
+uv run python scripts/make_macos_icns.py
+```
