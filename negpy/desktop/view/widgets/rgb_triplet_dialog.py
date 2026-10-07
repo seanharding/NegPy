@@ -37,7 +37,7 @@ class RgbTripletDialog(QDialog):
 
         self._align = QCheckBox("Align channels (sub-pixel)")
         self._align.setChecked(align)
-        self._align.setToolTip("Register green/blue to the red exposure to remove fringing from capture drift.")
+        self._align.setToolTip("Register red/blue to the green exposure to remove fringing from capture drift.")
         layout.addWidget(self._align)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)

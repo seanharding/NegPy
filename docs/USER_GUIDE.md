@@ -682,7 +682,7 @@ How the files become frames. Neither toggle has a scope pair.
 #### Trichrome
 
 *   **Trichrome Mode** (three-exposure narrowband capture): assembles each frame from a red, green and blue exposure, grouped by capture time (else filename order), so shoot each frame's three back to back. Shots that are not one of each color of the same frame stay separate, for pairing by hand. An assembled frame has the three-dot badge ([Triage](#triage-culling-the-roll)).
-*   **Edit Triplet…** (pen icon): the **Edit RGB Triplet…** dialog for the current frame. **Align channels (sub-pixel)** registers green and blue to red, removing color fringes.
+*   **Edit Triplet…** (pen icon): the **Edit RGB Triplet…** dialog for the current frame. **Align channels (sub-pixel)** registers red and blue to green, removing color fringes.
 *   **Merge Frame to TIFF Negative…** / **Merge Selected to TIFF Negative…** (right-click): replaces each triplet or stitch with one 16-bit linear TIFF negative beside its first source (`<red name>_RGB.tif`, `<first part name>_STITCH.tif`). It renders the same and keeps the edit, marks and scene. A stitch also bakes in flat field and sensor correction and cannot be unstitched. **Move each merged frame's source files to the Trash** (on by default) trashes the sources once the file is verified. A frame already merged is left alone (delete its negative to merge again); brackets, slides and LinearRaw DNG sources are skipped.
 
 The line under the buttons names the two exposures the frame is assembled from. Each roll remembers its own Trichrome Mode; a new roll, or a batch that is not one roll, takes the mode last chosen.
