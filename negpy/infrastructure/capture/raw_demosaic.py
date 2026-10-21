@@ -36,9 +36,13 @@ def _linearity_limit(raw, positions: Optional[Sequence[int]] = None) -> int:
         return generic
     values = [per_channel[j] for j in positions] if positions is not None else per_channel
     calibrated = int(min(values))
-    # A calibrated limit can't legitimately exceed the format's own ADC ceiling; a body
-    # reporting one anyway is bad metadata, not a wider range.
-    return min(calibrated, generic) if generic > 0 else calibrated
+    if generic <= 0:
+        return calibrated
+    # A calibrated limit sits a little under the ADC ceiling. One above it, or far below it (a
+    # body LibRaw does not know yet, read with another body's maker-note layout), is bad metadata.
+    if calibrated < generic // 2:
+        return generic
+    return min(calibrated, generic)
 
 
 def _user_sat(raw) -> Optional[int]:

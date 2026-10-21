@@ -106,6 +106,8 @@ def mode_aware_exposure_reset(mode: str, base: ExposureConfig) -> ExposureConfig
 
 # Built-in fallback crosstalk matrix (row-major 3x3) used when no profile is baked.
 DEFAULT_CROSSTALK_MATRIX = (1.0, -0.05, -0.02, -0.04, 1.0, -0.08, -0.01, -0.1, 1.0)
+# Log-density span below which a channel's saved bounds hold no range to normalize.
+_MIN_BOUNDS_RANGE = 1e-4
 
 
 @dataclass(frozen=True)
@@ -230,8 +232,10 @@ class ProcessConfig:
 
     @property
     def is_local_initialized(self) -> bool:
-        """Checks if per-file auto-exposure has been performed."""
-        return any(v != 0.0 for v in self.local_floors)
+        """Checks if per-file auto-exposure has been performed. Bounds with no range (measured on a
+        blank decode) cannot normalize anything and count as unmeasured."""
+        has_range = any(abs(c - f) > _MIN_BOUNDS_RANGE for f, c in zip(self.local_floors, self.local_ceils))
+        return any(v != 0.0 for v in self.local_floors) and has_range
 
     @property
     def is_locked_initialized(self) -> bool:

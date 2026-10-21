@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from negpy.features.exposure.normalization import BOUNDS_VERSION, analyze_log_exposure_bounds_from_log, prefilter_log_grid
+from negpy.features.process.models import ProcessConfig
 from negpy.infrastructure.storage.repository import StorageRepository
 from negpy.services.assets.migrations import bounds
 from negpy.services.assets.migrations.bounds import migrate_stale_frame_bounds
@@ -79,6 +80,14 @@ def test_a_version_bump_drops_them_again(repo, monkeypatch):
     migrate_stale_frame_bounds(repo)
 
     assert _settings(repo, "file_settings", file_hash="h1")["local_floors"] == _ZERO
+
+
+def test_bounds_with_no_range_count_as_unmeasured():
+    # Bounds measured on a decode that clipped to white (issue #1469) are measured again.
+    flat = ProcessConfig(local_floors=(-0.08, -0.23, -0.11), local_ceils=(-0.08, -0.23, -0.11))
+    measured = ProcessConfig(local_floors=tuple(_MEASURED["local_floors"]), local_ceils=tuple(_MEASURED["local_ceils"]))
+    assert not flat.is_local_initialized
+    assert measured.is_local_initialized
 
 
 def _synthetic_negative() -> np.ndarray:

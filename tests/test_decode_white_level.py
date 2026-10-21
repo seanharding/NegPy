@@ -72,6 +72,20 @@ def test_sensor_decode_subtracts_the_black_level_from_the_calibrated_limit() -> 
     assert raw.seen["user_sat"] == 15311 - 512
 
 
+def test_sensor_decode_ignores_an_implausibly_low_calibrated_limit() -> None:
+    # LibRaw reads a Canon EOS R6 Mark III's calibrated table as 137 (issue #1469);
+    # trusting it clips every photosite to white.
+    class _Spy(_SpyRaw):
+        white_level = 16383
+        camera_white_level_per_channel = [137, 137, 137, 137]
+
+    raw = _Spy()
+    with patch("negpy.services.rendering.image_processor.loader_factory") as lf:
+        lf.get_loader.return_value = (raw, {})
+        ImageProcessor()._decode_sensor_rgb("/x.dng", linear_raw=True)
+    assert raw.seen["user_sat"] == 16383
+
+
 def test_preview_decode_pins_the_white_level() -> None:
     raw = _SpyRaw()
     with patch("negpy.services.rendering.preview_manager.loader_factory") as lf:
